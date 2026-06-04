@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-  <!-- marked.js for markdown rendering -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 </head>
 <body class="post-page">
@@ -24,7 +23,6 @@
 
   <div class="post-layout">
 
-    <!-- SIDEBAR -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-inner">
         <a href="index.html" class="back-link">← All posts</a>
@@ -35,7 +33,6 @@
       </div>
     </aside>
 
-    <!-- MAIN CONTENT -->
     <main class="post-main">
       <div id="post-loading" class="loading-state">
         <span class="loading-dot"></span>
@@ -70,36 +67,31 @@
     // =========================================================
     // CONFIGURATION — keep in sync with index.html
     // =========================================================
-    const GITHUB_USER = 'MattHSBY';
-    const GITHUB_REPO = 'MattHSBY.github.io';
+    const VAULT_USER = 'MattHSBY';
+    const VAULT_REPO = 'blog-vault';
     // =========================================================
 
-    const POSTS_DIR = 'posts';
-    const API_BASE  = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}`;
+    const IGNORE = new Set(['.obsidian', '.git', 'README.md', 'readme.md']);
 
-    const params = new URLSearchParams(window.location.search);
-    // path param from index.html links; fallback to URL params for user/repo overrides
-    const filePath = params.get('path');
-    const user = params.get('user') || GITHUB_USER;
-    const repo = params.get('repo') || GITHUB_REPO;
+    // Query params: path, user, repo — all passed by index.html links
+    const params    = new URLSearchParams(window.location.search);
+    const filePath  = params.get('path');
+    const vaultUser = params.get('user') || VAULT_USER;
+    const vaultRepo = params.get('repo') || VAULT_REPO;
+    const VAULT_API = `https://api.github.com/repos/${vaultUser}/${vaultRepo}`;
 
-    // Configure marked for safe rendering
-    marked.setOptions({
-      breaks: true,
-      gfm: true
-    });
+    marked.setOptions({ breaks: true, gfm: true });
 
-    async function fetchAllPosts(path = POSTS_DIR, base = API_BASE) {
-      const res = await fetch(`${base}/contents/${path}`);
+    async function fetchAllPosts(path = '') {
+      const url = path ? `${VAULT_API}/contents/${path}` : `${VAULT_API}/contents`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error(`GitHub API ${res.status}`);
       const items = await res.json();
       const posts = [];
       for (const item of items) {
-        if (item.type === 'dir') {
-          posts.push(...await fetchAllPosts(item.path, base));
-        } else if (item.type === 'file' && item.name.endsWith('.md')) {
-          posts.push(item);
-        }
+        if (IGNORE.has(item.name)) continue;
+        if (item.type === 'dir') posts.push(...await fetchAllPosts(item.path));
+        else if (item.type === 'file' && item.name.endsWith('.md')) posts.push(item);
       }
       return posts;
     }
@@ -110,8 +102,8 @@
     }
 
     function extractTitle(raw) {
-      const match = raw.match(/^#\s+(.+)/m);
-      return match ? match[1] : 'Untitled';
+      const m = raw.match(/^#\s+(.+)/m);
+      return m ? m[1] : 'Untitled';
     }
 
     function extractDate(raw) {
@@ -125,27 +117,20 @@
       return null;
     }
 
-    function postUrl(path) {
-      return `post.html?path=${encodeURIComponent(path)}&user=${user}&repo=${repo}`;
-    }
-
     function stripTitleAndDate(raw) {
-      // Remove the first # heading and the optional italics date line
       const lines = raw.split('\n');
       let i = 0;
-      // skip blank lines at top
       while (i < lines.length && !lines[i].trim()) i++;
-      // skip title
       if (lines[i] && lines[i].trim().startsWith('# ')) {
         i++;
-        // skip blank
         while (i < lines.length && !lines[i].trim()) i++;
-        // skip date line
-        if (lines[i] && /^\*[^*]+\*$/.test(lines[i].trim())) {
-          i++;
-        }
+        if (lines[i] && /^\*[^*]+\*$/.test(lines[i].trim())) i++;
       }
       return lines.slice(i).join('\n');
+    }
+
+    function postUrl(path) {
+      return `post.html?path=${encodeURIComponent(path)}&user=${vaultUser}&repo=${vaultRepo}`;
     }
 
     async function loadPost() {
@@ -157,28 +142,25 @@
         return;
       }
 
-      const base = `https://api.github.com/repos/${user}/${repo}`;
-
       try {
-        // Fetch post content
-        const fileRes = await fetch(`${base}/contents/${filePath}`);
+        const fileRes = await fetch(`${VAULT_API}/contents/${filePath}`);
         if (!fileRes.ok) throw new Error(`Could not load post (${fileRes.status})`);
         const fileData = await fileRes.json();
-        const raw = atob(fileData.content.replace(/\n/g, ''));
-        const decoded = decodeURIComponent(escape(raw));
+        // Decode base64 content returned by GitHub API
+        const raw = decodeURIComponent(
+          escape(atob(fileData.content.replace(/\n/g, '')))
+        );
 
-        const title   = extractTitle(decoded);
-        const dateStr = extractDate(decoded);
-        const body    = stripTitleAndDate(decoded);
+        const title    = extractTitle(raw);
+        const dateStr  = extractDate(raw);
+        const body     = stripTitleAndDate(raw);
 
-        // Set page title
         document.title = `${title} — Your Name`;
 
-        // Determine category from path
-        const slug = filePath.replace(/^posts\//, '').replace(/\.md$/, '');
-        const category = slug.includes('/') ? slug.split('/')[0] : null;
+        // Category = top-level folder name, if file is nested
+        const parts    = filePath.replace(/\.md$/, '').split('/');
+        const category = parts.length > 1 ? parts[0] : null;
 
-        // Render
         document.getElementById('post-title').textContent = title;
         if (dateStr) document.getElementById('post-date').textContent = dateStr;
         if (category) {
@@ -202,10 +184,7 @@
     async function loadSidebar() {
       const sidebarNav = document.getElementById('sidebar-posts');
       try {
-        const base = `https://api.github.com/repos/${user}/${repo}`;
-        const files = await fetchAllPosts(POSTS_DIR, base);
-
-        // Get titles for sidebar links
+        const files = await fetchAllPosts();
         const posts = await Promise.all(files.map(async f => {
           const raw = await fetchMarkdown(f.download_url);
           return { path: f.path, title: extractTitle(raw), date: extractDate(raw) };
@@ -229,7 +208,6 @@
           a.textContent = p.title;
           sidebarNav.appendChild(a);
 
-          // Build prev/next nav from sidebar order
           if (isCurrent) {
             const nav = document.getElementById('post-nav');
             if (posts[i + 1]) {
@@ -254,7 +232,6 @@
       }
     }
 
-    // Sidebar toggle for mobile
     document.addEventListener('DOMContentLoaded', () => {
       loadPost();
       loadSidebar();
