@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Loading… — MattHSBY</title>
+  <title>Loading… — Your Name</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -13,7 +13,7 @@
 
   <header class="site-header">
     <div class="header-inner">
-      <a href="index.html" class="site-title">MattHSBY</a>
+      <a href="index.html" class="site-title">Your Name</a>
       <nav class="site-nav">
         <a href="index.html" class="nav-link">Writing</a>
         <a href="about.html" class="nav-link">About</a>
@@ -44,7 +44,7 @@
       <article id="post-article" style="display:none">
         <header class="post-header">
           <div class="post-header-meta">
-            <span id="post-category" class="post-category" style="display:none"></span>
+            <div id="post-category" class="post-category-breadcrumb"></div>
             <span id="post-date" class="post-date"></span>
           </div>
           <h1 id="post-title" class="post-title"></h1>
@@ -67,8 +67,8 @@
     // =========================================================
     // CONFIGURATION — keep in sync with index.html
     // =========================================================
-    const VAULT_USER = 'MattHSBY';
-    const VAULT_REPO = 'blog-vault';
+    const VAULT_USER = 'YOUR_GITHUB_USERNAME';
+    const VAULT_REPO = 'YOUR_VAULT_REPO_NAME';
     // =========================================================
 
     const IGNORE = new Set(['.obsidian', '.git', 'README.md', 'readme.md']);
@@ -157,17 +157,18 @@
 
         document.title = `${title} — Your Name`;
 
-        // Category = top-level folder name, if file is nested
-        const parts    = filePath.replace(/\.md$/, '').split('/');
-        const category = parts.length > 1 ? parts[0] : null;
+        // Build category breadcrumb from all folder segments in the path
+        const parts   = filePath.replace(/\.md$/, '').split('/');
+        const folders = parts.slice(0, -1);
+        const catEl   = document.getElementById('post-category');
+        if (folders.length) {
+          catEl.innerHTML = folders.map((f, i) =>
+            `${i > 0 ? '<span class="post-category-sep">›</span>' : ''}<span class="post-category">${f}</span>`
+          ).join('');
+        }
 
         document.getElementById('post-title').textContent = title;
         if (dateStr) document.getElementById('post-date').textContent = dateStr;
-        if (category) {
-          const catEl = document.getElementById('post-category');
-          catEl.textContent = category;
-          catEl.style.display = 'inline';
-        }
         document.getElementById('post-body').innerHTML = marked.parse(body);
 
         document.getElementById('post-loading').style.display = 'none';

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MattHSBY Page</title>
+  <title>Your Name — Writing</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
@@ -12,7 +12,7 @@
 
   <header class="site-header">
     <div class="header-inner">
-      <a href="index.html" class="site-title">Matt Hornsby</a>
+      <a href="index.html" class="site-title">Your Name</a>
       <nav class="site-nav">
         <a href="index.html" class="nav-link active">Writing</a>
         <a href="about.html" class="nav-link">About</a>
@@ -51,8 +51,8 @@
     //                            back to the source; not used for
     //                            fetching posts)
     // =========================================================
-    const VAULT_USER = 'MattHSBY';
-    const VAULT_REPO = 'blog-vault';   // e.g. 'blog-vault'
+    const VAULT_USER = 'YOUR_GITHUB_USERNAME';
+    const VAULT_REPO = 'YOUR_VAULT_REPO_NAME';   // e.g. 'blog-vault'
     // =========================================================
 
     const VAULT_API = `https://api.github.com/repos/${VAULT_USER}/${VAULT_REPO}`;
@@ -128,16 +128,21 @@
     }
 
     function renderCard(filePath, meta) {
-      // Derive category from the top-level folder name, if any
+      // All folder segments become individual category tags
       const parts = filePath.replace(/\.md$/, '').split('/');
-      const category = parts.length > 1 ? parts[0] : null;
+      const folders = parts.slice(0, -1); // everything except the filename
+      const categoryHTML = folders.length
+        ? folders.map((f, i) =>
+            `${i > 0 ? '<span class="card-category-sep">›</span>' : ''}<span class="card-category">${f}</span>`
+          ).join('')
+        : '';
 
       const card = document.createElement('article');
       card.className = 'post-card';
       card.innerHTML = `
         <a href="${postUrl(filePath)}" class="card-link">
           <div class="card-meta">
-            ${category ? `<span class="card-category">${category}</span>` : ''}
+            ${categoryHTML}
             ${meta.dateStr ? `<span class="card-date">${meta.dateStr}</span>` : ''}
           </div>
           <h2 class="card-title">${meta.title}</h2>
