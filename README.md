@@ -1,6 +1,6 @@
 # Blog Site — GitHub Pages
 
-A static blog served from GitHub Pages. Posts live in another repository (blog-vault) and are fetched at runtime via the GitHub API.
+A static blog served from GitHub Pages. Posts live in another repository ([blog-vault](https://github.com/MattHSBY/blog-vault)) and are fetched at runtime via the GitHub API.
 
 ---
 
