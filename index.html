@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Name — Writing</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+</head>
+<body class="home">
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="site-title">Matt Hornsby</a>
+      <nav class="site-nav">
+        <a href="index.html" class="nav-link active">Writing</a>
+        <a href="about.html" class="nav-link">About</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="hero-label">— a notebook made public</p>
+      <h1 class="hero-title">Things I'm<br><em>working on</em></h1>
+    </section>
+
+    <section class="posts-section">
+      <div id="loading" class="loading-state">
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+      </div>
+      <div id="error" class="error-state" style="display:none"></div>
+      <div id="posts-grid" class="posts-grid" style="display:none"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Written in <a href="https://obsidian.md" target="_blank">Obsidian</a>. Published via <a href="https://pages.github.com" target="_blank">GitHub Pages</a>.</p>
+  </footer>
+
+  <script>
+    // =========================================================
+    // CONFIGURATION — edit these two lines
+    // =========================================================
+    const GITHUB_USER = 'MattHSBY';
+    const GITHUB_REPO = 'MattHSBY.github.io';
+    // =========================================================
+
+    const POSTS_DIR = 'posts';
+    const API_BASE  = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}`;
+
+    // Recursively fetch all .md files under posts/
+    async function fetchAllPosts(path = POSTS_DIR) {
+      const res = await fetch(`${API_BASE}/contents/${path}`);
+      if (!res.ok) throw new Error(`GitHub API error: ${res.status} — check GITHUB_USER and GITHUB_REPO in index.html`);
+      const items = await res.json();
+
+      const posts = [];
+      for (const item of items) {
+        if (item.type === 'dir') {
+          const sub = await fetchAllPosts(item.path);
+          posts.push(...sub);
+        } else if (item.type === 'file' && item.name.endsWith('.md')) {
+          posts.push(item);
+        }
+      }
+      return posts;
+    }
+
+    // Fetch raw markdown text for a file
+    async function fetchMarkdown(downloadUrl) {
+      const res = await fetch(downloadUrl);
+      return res.text();
+    }
+
+    // Extract title (first # heading) and preview text from raw markdown
+    function parsePost(raw) {
+      const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+
+      let title = null;
+      let dateStr = null;
+      const bodyLines = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (!title && line.startsWith('# ')) {
+          title = line.replace(/^#\s+/, '');
+        } else if (!dateStr && title && /^\*[^*]+\*$/.test(line)) {
+          // italics-only line after title = date
+          dateStr = line.replace(/^\*|\*$/g, '');
+        } else if (title) {
+          bodyLines.push(line);
+        }
+      }
+
+      // Strip markdown syntax for preview
+      const previewRaw = bodyLines.slice(0, 6).join(' ');
+      const preview = previewRaw
+        .replace(/^#{1,6}\s+/gm, '')
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/\*(.+?)\*/g, '$1')
+        .replace(/`(.+?)`/g, '$1')
+        .replace(/\[(.+?)\]\(.+?\)/g, '$1')
+        .replace(/^[-*>]\s+/gm, '')
+        .trim()
+        .slice(0, 220);
+
+      return { title: title || 'Untitled', dateStr, preview: preview + (preview.length === 220 ? '…' : '') };
+    }
+
+    // Build URL for post.html to load a specific file
+    function postUrl(filePath) {
+      return `post.html?path=${encodeURIComponent(filePath)}&user=${GITHUB_USER}&repo=${GITHUB_REPO}`;
+    }
+
+    // Render a single post card
+    function renderCard(filePath, meta) {
+      const slug = filePath.replace(/^posts\//, '').replace(/\.md$/, '');
+      const category = slug.includes('/') ? slug.split('/')[0] : null;
+      const card = document.createElement('article');
+      card.className = 'post-card';
+      card.innerHTML = `
+        <a href="${postUrl(filePath)}" class="card-link">
+          <div class="card-meta">
+            ${category ? `<span class="card-category">${category}</span>` : ''}
+            ${meta.dateStr ? `<span class="card-date">${meta.dateStr}</span>` : ''}
+          </div>
+          <h2 class="card-title">${meta.title}</h2>
+          <p class="card-preview">${meta.preview}</p>
+          <span class="card-read">Read →</span>
+        </a>
+      `;
+      return card;
+    }
+
+    async function init() {
+      const loading = document.getElementById('loading');
+      const errorEl = document.getElementById('error');
+      const grid    = document.getElementById('posts-grid');
+
+      try {
+        const files = await fetchAllPosts();
+        if (files.length === 0) {
+          loading.style.display = 'none';
+          errorEl.style.display = 'block';
+          errorEl.textContent = 'No posts found yet. Add .md files to your posts/ folder.';
+          return;
+        }
+
+        // Fetch all post content in parallel
+        const metas = await Promise.all(
+          files.map(f => fetchMarkdown(f.download_url).then(raw => ({
+            path: f.path,
+            ...parsePost(raw)
+          })))
+        );
+
+        // Sort: posts with dates first (newest), then undated
+        metas.sort((a, b) => {
+          if (a.dateStr && b.dateStr) return b.dateStr.localeCompare(a.dateStr);
+          if (a.dateStr) return -1;
+          if (b.dateStr) return 1;
+          return a.title.localeCompare(b.title);
+        });
+
+        loading.style.display = 'none';
+        grid.style.display = 'grid';
+        metas.forEach(m => grid.appendChild(renderCard(m.path, m)));
+
+      } catch (err) {
+        loading.style.display = 'none';
+        errorEl.style.display = 'block';
+        errorEl.innerHTML = `<strong>Could not load posts.</strong><br>${err.message}`;
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

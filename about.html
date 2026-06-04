@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About — Your Name</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    .about-layout {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 4rem 2rem 6rem;
+      flex: 1;
+    }
+    .about-layout h1 {
+      font-family: var(--font-display);
+      font-size: 3rem;
+      font-weight: 700;
+      margin-bottom: 2rem;
+    }
+    .about-layout p {
+      font-size: 1.0625rem;
+      line-height: 1.8;
+      color: var(--ink-light);
+      margin-bottom: 1.4rem;
+    }
+    .about-layout a { color: var(--accent); text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="site-title">Your Name</a>
+      <nav class="site-nav">
+        <a href="index.html" class="nav-link">Writing</a>
+        <a href="about.html" class="nav-link active">About</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="about-layout">
+    <h1>About</h1>
+    <p>Hi — I'm [Your Name]. Write something about yourself here.</p>
+    <p>This site is a notebook made public. I write about [topics] and publish directly from <a href="https://obsidian.md" target="_blank">Obsidian</a> via Git.</p>
+    <p>You can find me on <a href="#">GitHub</a>.</p>
+  </main>
+
+  <footer class="site-footer">
+    <p>Written in <a href="https://obsidian.md" target="_blank">Obsidian</a>. Published via <a href="https://pages.github.com" target="_blank">GitHub Pages</a>.</p>
+  </footer>
+</body>
+</html>

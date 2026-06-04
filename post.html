@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loading… — Your Name</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <!-- marked.js for markdown rendering -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+</head>
+<body class="post-page">
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a href="index.html" class="site-title">Your Name</a>
+      <nav class="site-nav">
+        <a href="index.html" class="nav-link">Writing</a>
+        <a href="about.html" class="nav-link">About</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="post-layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-inner">
+        <a href="index.html" class="back-link">← All posts</a>
+        <h3 class="sidebar-heading">More posts</h3>
+        <nav id="sidebar-posts" class="sidebar-nav">
+          <p class="sidebar-loading">Loading…</p>
+        </nav>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="post-main">
+      <div id="post-loading" class="loading-state">
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+      </div>
+      <div id="post-error" class="error-state" style="display:none"></div>
+
+      <article id="post-article" style="display:none">
+        <header class="post-header">
+          <div class="post-header-meta">
+            <span id="post-category" class="post-category" style="display:none"></span>
+            <span id="post-date" class="post-date"></span>
+          </div>
+          <h1 id="post-title" class="post-title"></h1>
+        </header>
+        <div id="post-body" class="post-body"></div>
+        <footer class="post-footer">
+          <div class="post-nav" id="post-nav"></div>
+          <a href="index.html" class="back-to-all">← Back to all posts</a>
+        </footer>
+      </article>
+    </main>
+
+  </div>
+
+  <footer class="site-footer">
+    <p>Written in <a href="https://obsidian.md" target="_blank">Obsidian</a>. Published via <a href="https://pages.github.com" target="_blank">GitHub Pages</a>.</p>
+  </footer>
+
+  <script>
+    // =========================================================
+    // CONFIGURATION — keep in sync with index.html
+    // =========================================================
+    const GITHUB_USER = 'MattHSBY';
+    const GITHUB_REPO = 'MattHSBY.github.io';
+    // =========================================================
+
+    const POSTS_DIR = 'posts';
+    const API_BASE  = `https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}`;
+
+    const params = new URLSearchParams(window.location.search);
+    // path param from index.html links; fallback to URL params for user/repo overrides
+    const filePath = params.get('path');
+    const user = params.get('user') || GITHUB_USER;
+    const repo = params.get('repo') || GITHUB_REPO;
+
+    // Configure marked for safe rendering
+    marked.setOptions({
+      breaks: true,
+      gfm: true
+    });
+
+    async function fetchAllPosts(path = POSTS_DIR, base = API_BASE) {
+      const res = await fetch(`${base}/contents/${path}`);
+      if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+      const items = await res.json();
+      const posts = [];
+      for (const item of items) {
+        if (item.type === 'dir') {
+          posts.push(...await fetchAllPosts(item.path, base));
+        } else if (item.type === 'file' && item.name.endsWith('.md')) {
+          posts.push(item);
+        }
+      }
+      return posts;
+    }
+
+    async function fetchMarkdown(downloadUrl) {
+      const res = await fetch(downloadUrl);
+      return res.text();
+    }
+
+    function extractTitle(raw) {
+      const match = raw.match(/^#\s+(.+)/m);
+      return match ? match[1] : 'Untitled';
+    }
+
+    function extractDate(raw) {
+      const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+      let sawTitle = false;
+      for (const line of lines) {
+        if (line.startsWith('# ')) { sawTitle = true; continue; }
+        if (sawTitle && /^\*[^*]+\*$/.test(line)) return line.replace(/^\*|\*$/g, '');
+        if (sawTitle && line) break;
+      }
+      return null;
+    }
+
+    function postUrl(path) {
+      return `post.html?path=${encodeURIComponent(path)}&user=${user}&repo=${repo}`;
+    }
+
+    function stripTitleAndDate(raw) {
+      // Remove the first # heading and the optional italics date line
+      const lines = raw.split('\n');
+      let i = 0;
+      // skip blank lines at top
+      while (i < lines.length && !lines[i].trim()) i++;
+      // skip title
+      if (lines[i] && lines[i].trim().startsWith('# ')) {
+        i++;
+        // skip blank
+        while (i < lines.length && !lines[i].trim()) i++;
+        // skip date line
+        if (lines[i] && /^\*[^*]+\*$/.test(lines[i].trim())) {
+          i++;
+        }
+      }
+      return lines.slice(i).join('\n');
+    }
+
+    async function loadPost() {
+      if (!filePath) {
+        document.getElementById('post-loading').style.display = 'none';
+        const err = document.getElementById('post-error');
+        err.style.display = 'block';
+        err.textContent = 'No post path specified.';
+        return;
+      }
+
+      const base = `https://api.github.com/repos/${user}/${repo}`;
+
+      try {
+        // Fetch post content
+        const fileRes = await fetch(`${base}/contents/${filePath}`);
+        if (!fileRes.ok) throw new Error(`Could not load post (${fileRes.status})`);
+        const fileData = await fileRes.json();
+        const raw = atob(fileData.content.replace(/\n/g, ''));
+        const decoded = decodeURIComponent(escape(raw));
+
+        const title   = extractTitle(decoded);
+        const dateStr = extractDate(decoded);
+        const body    = stripTitleAndDate(decoded);
+
+        // Set page title
+        document.title = `${title} — Your Name`;
+
+        // Determine category from path
+        const slug = filePath.replace(/^posts\//, '').replace(/\.md$/, '');
+        const category = slug.includes('/') ? slug.split('/')[0] : null;
+
+        // Render
+        document.getElementById('post-title').textContent = title;
+        if (dateStr) document.getElementById('post-date').textContent = dateStr;
+        if (category) {
+          const catEl = document.getElementById('post-category');
+          catEl.textContent = category;
+          catEl.style.display = 'inline';
+        }
+        document.getElementById('post-body').innerHTML = marked.parse(body);
+
+        document.getElementById('post-loading').style.display = 'none';
+        document.getElementById('post-article').style.display = 'block';
+
+      } catch (err) {
+        document.getElementById('post-loading').style.display = 'none';
+        const errEl = document.getElementById('post-error');
+        errEl.style.display = 'block';
+        errEl.innerHTML = `<strong>Could not load post.</strong><br>${err.message}`;
+      }
+    }
+
+    async function loadSidebar() {
+      const sidebarNav = document.getElementById('sidebar-posts');
+      try {
+        const base = `https://api.github.com/repos/${user}/${repo}`;
+        const files = await fetchAllPosts(POSTS_DIR, base);
+
+        // Get titles for sidebar links
+        const posts = await Promise.all(files.map(async f => {
+          const raw = await fetchMarkdown(f.download_url);
+          return { path: f.path, title: extractTitle(raw), date: extractDate(raw) };
+        }));
+
+        posts.sort((a, b) => {
+          if (a.date && b.date) return b.date.localeCompare(a.date);
+          if (a.date) return -1;
+          if (b.date) return 1;
+          return a.title.localeCompare(b.title);
+        });
+
+        sidebarNav.innerHTML = '';
+        const currentPath = decodeURIComponent(filePath || '');
+
+        posts.forEach((p, i) => {
+          const isCurrent = p.path === currentPath;
+          const a = document.createElement('a');
+          a.href = postUrl(p.path);
+          a.className = 'sidebar-link' + (isCurrent ? ' active' : '');
+          a.textContent = p.title;
+          sidebarNav.appendChild(a);
+
+          // Build prev/next nav from sidebar order
+          if (isCurrent) {
+            const nav = document.getElementById('post-nav');
+            if (posts[i + 1]) {
+              const prev = document.createElement('a');
+              prev.href = postUrl(posts[i + 1].path);
+              prev.className = 'post-nav-link prev';
+              prev.innerHTML = `<span>← Previous</span><span class="post-nav-title">${posts[i + 1].title}</span>`;
+              nav.appendChild(prev);
+            }
+            if (posts[i - 1]) {
+              const next = document.createElement('a');
+              next.href = postUrl(posts[i - 1].path);
+              next.className = 'post-nav-link next';
+              next.innerHTML = `<span>Next →</span><span class="post-nav-title">${posts[i - 1].title}</span>`;
+              nav.appendChild(next);
+            }
+          }
+        });
+
+      } catch {
+        sidebarNav.innerHTML = '<p class="sidebar-loading">Could not load.</p>';
+      }
+    }
+
+    // Sidebar toggle for mobile
+    document.addEventListener('DOMContentLoaded', () => {
+      loadPost();
+      loadSidebar();
+    });
+  </script>
+</body>
+</html>
